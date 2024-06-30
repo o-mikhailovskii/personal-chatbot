@@ -14,6 +14,7 @@ from langchain.schema import SystemMessage
 from langchain_anthropic import ChatAnthropic
 from langchain_cohere import ChatCohere
 from langchain_community.chat_models import ChatOllama
+from langchain_community.llms.cloudflare_workersai import CloudflareWorkersAI
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_groq import ChatGroq
 
@@ -32,6 +33,8 @@ class Configuration:
     GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
     ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
     GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+    CF_ACCOUNT_ID = os.environ.get("CF_ACCOUNT_ID")
+    CF_API_KEY = os.environ.get("CF_WORKER_AI_TOKEN")
 
 
 # LLM provider classes and parameters
@@ -43,21 +46,21 @@ LLM_PROVIDERS: Dict[str, Dict[str, object]] = {
             "cohere_api_key": Configuration.COHERE_API_KEY,
         },
     },
-    "Anthropic-Haiku": {
+    "Anthropic-Haiku-3": {
         "class": ChatAnthropic,
         "params": {
             "model_name": "claude-3-haiku-20240307",
             "api_key": Configuration.ANTHROPIC_API_KEY,
         },
     },
-    "Anthropic-Sonnet": {
+    "Anthropic-Sonnet-3.5": {
         "class": ChatAnthropic,
         "params": {
-            "model_name": "claude-3-sonnet-20240229",
+            "model_name": "claude-3-5-sonnet-20240620",
             "api_key": Configuration.ANTHROPIC_API_KEY,
         },
     },
-    "Anthropic-Opus": {
+    "Anthropic-Opus-3": {
         "class": ChatAnthropic,
         "params": {
             "model_name": "claude-3-opus-20240229",
@@ -91,6 +94,15 @@ LLM_PROVIDERS: Dict[str, Dict[str, object]] = {
         "class": ChatOllama,
         "params": {
             "model": "phi3",
+        },
+        "use_proxy": False,
+    },
+    "Cloudflare-llama-3": {
+        "class": CloudflareWorkersAI,
+        "params": {
+            "account_id": Configuration.CF_ACCOUNT_ID,
+            "api_token": Configuration.CF_API_KEY,
+            "model": "@cf/meta/llama-3-8b-instruct",
         },
         "use_proxy": False,
     },
