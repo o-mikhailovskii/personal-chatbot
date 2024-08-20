@@ -17,6 +17,7 @@ from langchain_community.llms.cloudflare_workersai import CloudflareWorkersAI
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_groq import ChatGroq
 from langchain_ollama import ChatOllama
+from langchain_openai import ChatOpenAI
 
 load_dotenv()
 
@@ -35,6 +36,7 @@ class Configuration:
     GROQ_API_KEY = os.getenv("GROQ_API_KEY")
     CF_ACCOUNT_ID = os.environ.get("CF_ACCOUNT_ID")
     CF_API_KEY = os.environ.get("CF_WORKER_AI_TOKEN")
+    NVIDIA_API_KEY = os.environ.get("NVIDIA_API_KEY")
 
 
 # LLM provider classes and parameters
@@ -103,6 +105,15 @@ LLM_PROVIDERS: Dict[str, Dict[str, object]] = {
             "account_id": Configuration.CF_ACCOUNT_ID,
             "api_token": Configuration.CF_API_KEY,
             "model": "@cf/meta/llama-3-8b-instruct",
+        },
+        "use_proxy": False,
+    },
+    "NVIDIA-llama-3.1": {
+        "class": ChatOpenAI,
+        "params": {
+            "base_url": "https://integrate.api.nvidia.com/v1",
+            "api_key": Configuration.NVIDIA_API_KEY,
+            "model": "meta/llama-3.1-405b-instruct",
         },
         "use_proxy": False,
     },
