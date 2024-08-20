@@ -13,10 +13,10 @@ from langchain.prompts import (
 from langchain.schema import SystemMessage
 from langchain_anthropic import ChatAnthropic
 from langchain_cohere import ChatCohere
-from langchain_community.chat_models import ChatOllama
 from langchain_community.llms.cloudflare_workersai import CloudflareWorkersAI
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_groq import ChatGroq
+from langchain_ollama import ChatOllama
 
 load_dotenv()
 
