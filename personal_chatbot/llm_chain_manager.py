@@ -78,6 +78,14 @@ LLM_PROVIDERS: Dict[str, Dict[str, object]] = {
         },
         "use_proxy": True,
     },
+    "Google-Gemini-1.5-flash-latest": {
+        "class": ChatGoogleGenerativeAI,
+        "params": {
+            "model": "gemini-1.5-flash-latest",
+            "api_key": Configuration.GOOGLE_API_KEY,
+        },
+        "use_proxy": True,
+    },
     "Groq-llama3-70b-8192": {
         "class": ChatGroq,
         "params": {
