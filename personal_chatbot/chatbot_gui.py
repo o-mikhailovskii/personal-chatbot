@@ -1,6 +1,8 @@
 from tkinter import (
     END,
+    BooleanVar,
     Button,
+    Checkbutton,
     Entry,
     Label,
     LabelFrame,
@@ -12,12 +14,15 @@ from tkinter import (
 )
 from tkinter.scrolledtext import ScrolledText
 
+from langchain_core.messages import AIMessage, HumanMessage
+
 from .llm_chain_manager import LLM_PROVIDERS, LLMChainManager
 from .prompts_managers import (
     ChatHistoryPrompts,
     SystemPromptSelector,
     UserPromptSelector,
 )
+from .tools import chat_history_to_string
 
 PAD = 2
 
@@ -38,6 +43,7 @@ class Chatbot:
             self.custom_system_prompts_manager.get_prompts().keys()
         )
         self.user_prompt_options = self.user_prompts_manager.get_prompts().keys()
+        self.use_tools = False
 
         # Choose engine
         self._choose_engine()
@@ -355,6 +361,23 @@ class Chatbot:
         self.create_system_prompt_section()
         self.create_user_input_section()
         self.create_ai_response_section()
+        # Add checkbox for use_tools
+        self.use_tools_var = BooleanVar(value=self.use_tools)
+        self.use_tools_checkbox = Checkbutton(
+            self.root,
+            text="Use Tools",
+            variable=self.use_tools_var,
+            command=self.toggle_use_tools,
+        )
+        self.use_tools_checkbox.pack(pady=PAD)
+
+    def toggle_use_tools(self):
+        """
+        Toggle the use_tools flag and update the LLMChain manager.
+        """
+        self.use_tools = self.use_tools_var.get()
+        self.init_llm_chain_manager()
+        messagebox.showinfo("Success", "Tool usage updated successfully.")
 
     def init_llm_chain_manager(self):
         """
@@ -363,10 +386,10 @@ class Chatbot:
         self.llm_chain_manager = LLMChainManager(
             system_prompt=self.system_prompt,
             temperature=self.temperature,
+            use_tools=self.use_tools,
         )
         self.llm_chain_manager.init_llm(self.engine)
         self.llm_chain_manager.init_prompt()
-        self.llm_chain_manager.init_memory()
         self.llm_chain_manager.init_llm_chain()
 
     def change_system_prompt(self):
@@ -508,18 +531,22 @@ class Chatbot:
         if user_input:
             try:
                 # Send user input to LangChain for processing
-                response = self.llm_chain_manager.llm_chain.predict(
-                    human_input=user_input
+                response = self.llm_chain_manager.llm_chain.invoke(
+                    {"input": user_input, "chat_history": self.chat_history}
                 )
-
-                # Add user input and response to chat history
-                self.chat_history.append(f"USER: {user_input}\n")
-                self.chat_history.append(f"  AI: {response}\n")
-
+                if self.use_tools:
+                    response = response["output"]
+                self.chat_history.extend(
+                    [
+                        HumanMessage(content=user_input),
+                        AIMessage(content=response),
+                    ]
+                )
                 # Display the response in the output box
                 self.output_box.delete("1.0", END)
-                for message in self.chat_history[-2:]:
-                    self.output_box.insert(END, message + "\n")
+                self.output_box.insert(
+                    END, chat_history_to_string(self.chat_history[-2:])
+                )
                 self.output_box.see(END)
                 self.input_box.delete("1.0", END)
             except Exception as e:
@@ -531,7 +558,6 @@ class Chatbot:
         """
         Clear the LLM chain memory and chat history.
         """
-        self.llm_chain_manager.memory.clear()
         self.chat_history = []
         self.output_box.delete("1.0", END)
 

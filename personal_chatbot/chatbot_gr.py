@@ -1,4 +1,5 @@
 import gradio as gr
+from langchain_core.messages import AIMessage, HumanMessage
 
 from .llm_chain_manager import LLM_PROVIDERS, LLMChainManager
 from .prompts_managers import (
@@ -7,6 +8,7 @@ from .prompts_managers import (
     SystemPromptSelector,
     UserPromptSelector,
 )
+from .tools import chat_history_to_string
 
 
 class GradioChatbot:
@@ -34,6 +36,7 @@ class GradioChatbot:
         self.engine = None
         self.temperature = 0
         self.system_prompt = None
+        self.use_tools = False
 
     def load_config(self):
         try:
@@ -49,16 +52,21 @@ class GradioChatbot:
                 self.system_prompt,
             )
         except Exception as e:
-            return f"Error: Failed to load config: {str(e)}"
+            return (
+                f"Error: Failed to load config: {str(e)}",
+                self.engine,
+                self.temperature,
+                self.system_prompt,
+            )
 
     def init_llm_chain_manager(self):
         self.llm_chain_manager = LLMChainManager(
             system_prompt=self.system_prompt,
             temperature=self.temperature,
+            use_tools=self.use_tools,
         )
         self.llm_chain_manager.init_llm(self.engine)
         self.llm_chain_manager.init_prompt()
-        self.llm_chain_manager.init_memory()
         self.llm_chain_manager.init_llm_chain()
 
     def choose_engine(self, engine):
@@ -108,19 +116,24 @@ class GradioChatbot:
     def send_message(self, user_input):
         if user_input:
             try:
-                response = self.llm_chain_manager.llm_chain.predict(
-                    human_input=user_input
+                response = self.llm_chain_manager.llm_chain.invoke(
+                    {"input": user_input, "chat_history": self.chat_history}
                 )
-                self.chat_history.append(f"USER: {user_input}")
-                self.chat_history.append(f"AI: {response}")
-                return "\n".join(self.chat_history)
+                if self.use_tools:
+                    response = response["output"]
+                self.chat_history.extend(
+                    [
+                        HumanMessage(content=user_input),
+                        AIMessage(content=response),
+                    ]
+                )
+                return chat_history_to_string(self.chat_history)
             except Exception as e:
                 return f"Error: An error occurred: {str(e)}"
         else:
             return "Error: User input cannot be empty."
 
     def clear_memory(self):
-        self.llm_chain_manager.memory.clear()
         self.chat_history = []
         return "Memory cleared."
 
@@ -147,6 +160,11 @@ class GradioChatbot:
         except Exception as e:
             return f"Error: Failed to save config: {str(e)}"
 
+    def update_use_tools(self, use_tools):
+        self.use_tools = use_tools
+        self.init_llm_chain_manager()
+        return self.use_tools
+
     def launch(self):
         with gr.Blocks() as demo:
             gr.Markdown("# AI Chatbot")
@@ -154,6 +172,16 @@ class GradioChatbot:
             with gr.Group():
                 with gr.Row():
                     load_config_button = gr.Button("Load Config")
+                    use_tools_checkbox = gr.Checkbox(
+                        value=self.use_tools,
+                        label="Use Tools",
+                        interactive=True,
+                    )
+                    use_tools_checkbox.change(
+                        self.update_use_tools,
+                        inputs=[use_tools_checkbox],
+                        outputs=[use_tools_checkbox],
+                    )
                     save_config_button = gr.Button("Save Config")
 
                 with gr.Row():
@@ -172,7 +200,6 @@ class GradioChatbot:
                     temperature_button = gr.Button("Change Temperature")
                     set_system_prompt_button = gr.Button("Set System Prompt")
 
-            # with gr.Group():
             with gr.Column():
                 system_prompt_input = gr.Textbox(
                     value=self.system_prompt, label="System Prompt", lines=5
@@ -196,7 +223,6 @@ class GradioChatbot:
                 save_button = gr.Button("Save Chat History")
 
             # Connect components
-
             status_output = gr.Textbox(label="Status")
             load_config_button.click(
                 self.load_config,

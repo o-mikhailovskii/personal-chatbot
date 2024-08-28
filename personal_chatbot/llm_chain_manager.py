@@ -3,8 +3,7 @@ from dataclasses import dataclass
 from typing import Dict
 
 from dotenv import load_dotenv
-from langchain.chains import LLMChain
-from langchain.memory import ConversationBufferMemory
+from langchain.agents import AgentExecutor, Tool, create_tool_calling_agent
 from langchain.prompts import (
     ChatPromptTemplate,
     HumanMessagePromptTemplate,
@@ -14,6 +13,9 @@ from langchain.schema import SystemMessage
 from langchain_anthropic import ChatAnthropic
 from langchain_cohere import ChatCohere
 from langchain_community.llms.cloudflare_workersai import CloudflareWorkersAI
+from langchain_community.tools import DuckDuckGoSearchRun
+from langchain_core.output_parsers import StrOutputParser
+from langchain_google_community import GoogleSearchAPIWrapper
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_groq import ChatGroq
 from langchain_ollama import ChatOllama
@@ -37,6 +39,8 @@ class Configuration:
     CF_ACCOUNT_ID = os.environ.get("CF_ACCOUNT_ID")
     CF_API_KEY = os.environ.get("CF_WORKER_AI_TOKEN")
     NVIDIA_API_KEY = os.environ.get("NVIDIA_API_KEY")
+    GOOGLE_CSE_ID = os.environ.get("GOOGLE_CSE_ID")
+    GOOGLE_SEARCH_API_KEY = os.environ.get("GOOGLE_SEARCH_API_KEY")
 
 
 # LLM provider classes and parameters
@@ -134,13 +138,28 @@ class LLMChainManager:
     Manager class for LLMChain logic. Initializes and manages the LLMChain components.
     """
 
-    def __init__(self, system_prompt, temperature):
+    def __init__(self, system_prompt, temperature, use_tools=False):
         self.system_prompt = system_prompt
         self.temperature = temperature
+        self.use_tools = use_tools
         self.llm = None
         self.prompt = None
-        self.memory = None
         self.llm_chain = None
+        self.tools = [
+            Tool(
+                name="DuckDuckGo_Search",
+                func=DuckDuckGoSearchRun(),
+                description="DuckDuckGo tool to search the web for information.",
+            ),
+            Tool(
+                name="Google_Search",
+                description="Google tool to search the web for information.",
+                func=GoogleSearchAPIWrapper(
+                    google_cse_id=Configuration.GOOGLE_CSE_ID,
+                    google_api_key=Configuration.GOOGLE_SEARCH_API_KEY,
+                ).run,
+            ),
+        ]
 
     def init_llm(self, provider):
         """
@@ -155,12 +174,14 @@ class LLMChainManager:
         use_proxy = provider_config.get("use_proxy", False)
         if use_proxy:
             proxy = os.getenv("PROXY")
-            os.environ["http_proxy"] = proxy
-            os.environ["HTTP_PROXY"] = proxy
-            os.environ["https_proxy"] = proxy
-            os.environ["HTTPS_PROXY"] = proxy
+            if proxy:
+                os.environ["http_proxy"] = proxy
+                os.environ["HTTP_PROXY"] = proxy
+                os.environ["https_proxy"] = proxy
+                os.environ["HTTPS_PROXY"] = proxy
 
         self.llm = llm_class(**llm_params)
+        self.llm_with_tools = self.llm.bind_tools(self.tools)
 
     def init_prompt(self):
         """
@@ -171,22 +192,19 @@ class LLMChainManager:
             [
                 SystemMessage(content=self.system_prompt),
                 MessagesPlaceholder(variable_name="chat_history"),
-                HumanMessagePromptTemplate.from_template("{human_input}"),
+                HumanMessagePromptTemplate.from_template("{input}"),
+                ("placeholder", "{agent_scratchpad}"),
             ]
-        )
-
-    def init_memory(self):
-        """
-        Initialize the memory component to store chat history.
-        """
-        self.memory = ConversationBufferMemory(
-            memory_key="chat_history", return_messages=True
         )
 
     def init_llm_chain(self):
         """
         Initialize the LLMChain with the LLM, prompt, and memory components.
         """
-        self.llm_chain = LLMChain(
-            llm=self.llm, prompt=self.prompt, memory=self.memory, verbose=True
-        )
+        if self.use_tools:
+            agent = create_tool_calling_agent(
+                self.llm_with_tools, self.tools, self.prompt
+            )
+            self.llm_chain = AgentExecutor(agent=agent, tools=self.tools)
+        else:
+            self.llm_chain = self.prompt | self.llm | StrOutputParser()

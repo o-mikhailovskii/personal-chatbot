@@ -19,6 +19,8 @@ langchain-openai = "^0.1.22"
 langchain = "^0.2.14"
 langchain-community = "^0.2.12"
 gradio = "^4.41.0"
+duckduckgo-search = "^6.2.11"
+langchain-google-community = "^1.0.8"
 
 [tool.poetry.group.dev.dependencies]
 isort = "^5.13.2"
