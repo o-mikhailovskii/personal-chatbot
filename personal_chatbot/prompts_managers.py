@@ -47,3 +47,8 @@ class UserPromptSelector(PromptDumpManager):
 class ChatHistoryPrompts(PromptDumpManager):
     def __init__(self, filename="chat_history.json"):
         super().__init__(filename)
+
+
+class ConfigManager(PromptDumpManager):
+    def __init__(self, filename="config.json"):
+        super().__init__(filename, True)
